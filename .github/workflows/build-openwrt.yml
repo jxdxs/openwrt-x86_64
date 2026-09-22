@@ -63,6 +63,28 @@ jobs:
         working-directory: openwrt
         run: |
           make defconfig
+          echo '--- DIAG: .config file format ---'
+          file .config || true
+          head -c 16 .config | od -c | head -2 || true
+          echo '--- DIAG: .config stats ---'
+          wc -l .config
+          echo "PACKAGE entries: $(grep -cE '^#? ?CONFIG_PACKAGE' .config || true)"
+          echo '--- DIAG: raw luci/passwall lines in .config ---'
+          grep -nE 'luci' .config | head -30 || echo '(NO luci lines at all)'
+          echo '--- DIAG: metadata input (tmp/.config-package.in) ---'
+          if [ -f tmp/.config-package.in ]; then
+            echo "metadata lines: $(wc -l < tmp/.config-package.in)"
+            grep -c 'PACKAGE_luci-app-passwall' tmp/.config-package.in || echo 'passwall NOT in metadata'
+            grep -cE 'config PACKAGE_luci$' tmp/.config-package.in || echo 'luci meta NOT in metadata'
+            grep -c 'PACKAGE_luci-app-openclash' tmp/.config-package.in || echo 'openclash NOT in metadata'
+          else
+            echo 'tmp/.config-package.in MISSING'
+          fi
+          echo '--- DIAG: feeds list ---'
+          ./scripts/feeds list 2>/dev/null | grep -E '^(luci|luci-app-passwall) ' || echo '(not in feeds index)'
+          echo '--- DIAG: package/feeds symlinks ---'
+          ls -l package/feeds/ 2>/dev/null || true
+          ls -l package/feeds/passwall_luci/ 2>/dev/null || true
           echo '--- verify key symbols ---'
           fail=0
           check_y() { grep -qE "^$1=y" .config && echo "OK  $1=y" || { echo "MISSING $1"; fail=1; }; }
