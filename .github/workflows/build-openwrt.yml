@@ -82,6 +82,14 @@ jobs:
           fi
           echo '--- DIAG: feeds list ---'
           ./scripts/feeds list 2>/dev/null | grep -E '^(luci|luci-app-passwall) ' || echo '(not in feeds index)'
+          echo '--- DIAG: generated Kconfig block for PACKAGE_luci ---'
+          awk '/^config PACKAGE_luci$/{f=1} f{print} f&&/^$/{exit}' tmp/.config-package.in
+          echo '--- DIAG: generated Kconfig block for PACKAGE_luci-app-passwall ---'
+          awk '/^config PACKAGE_luci-app-passwall$/{f=1} f{print} f&&/^$/{exit}' tmp/.config-package.in
+          echo '--- DIAG: .config line for passwall ---'
+          grep -n 'PACKAGE_luci-app-passwall' .config || echo '(absent from .config)'
+          echo '--- DIAG: key dep packages in feeds index ---'
+          ./scripts/feeds list 2>/dev/null | grep -E '^(lyaml|ip-full|luci-light|luci-app-package-manager|coreutils-nohup) ' || echo '(some NOT in index)'
           echo '--- DIAG: package/feeds symlinks ---'
           ls -l package/feeds/ 2>/dev/null || true
           ls -l package/feeds/passwall_luci/ 2>/dev/null || true
