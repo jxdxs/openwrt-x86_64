@@ -82,12 +82,15 @@ jobs:
           fi
           echo '--- DIAG: feeds list ---'
           ./scripts/feeds list 2>/dev/null | grep -E '^(luci|luci-app-passwall) ' || echo '(not in feeds index)'
-          echo '--- DIAG: generated Kconfig block for PACKAGE_luci ---'
-          awk '/^(menu)?config PACKAGE_luci$/{f=1} f{print} f&&/^$/{exit}' tmp/.config-package.in
-          echo '--- DIAG: generated Kconfig block for PACKAGE_luci-app-passwall ---'
-          awk '/^(menu)?config PACKAGE_luci-app-passwall$/{f=1} f{print} f&&/^$/{exit}' tmp/.config-package.in
-          echo '--- DIAG: generated Kconfig block for PACKAGE_luci-light (transitive suspect) ---'
-          awk '/^(menu)?config PACKAGE_luci-light$/{f=1} f{print} f&&/^$/{exit}' tmp/.config-package.in
+          echo '--- DIAG: def lines raw for PACKAGE_luci ---'
+          grep -n -B3 -A30 'config PACKAGE_luci$' tmp/.config-package.in || echo '(STILL NOT FOUND unanchored)'
+          echo '--- DIAG: def lines raw for PACKAGE_luci-app-passwall ---'
+          grep -n -B3 -A34 'config PACKAGE_luci-app-passwall$' tmp/.config-package.in || echo '(STILL NOT FOUND unanchored)'
+          echo '--- DIAG: ip-full symbol in metadata ---'
+          grep -cE 'config PACKAGE_ip-full$' tmp/.config-package.in && echo 'ip-full DEFINED' || echo 'ip-full NOT DEFINED in metadata!'
+          grep -n 'PACKAGE_ip-full' tmp/.config-package.in | head -8
+          echo '--- DIAG: feeds list ip* ---'
+          ./scripts/feeds list 2>/dev/null | grep -E '^ip' || echo '(ip* NOT in feeds index)'
           echo '--- DIAG: .config line for passwall ---'
           grep -n 'PACKAGE_luci-app-passwall' .config || echo '(absent from .config)'
           echo '--- DIAG: key dep packages in feeds index ---'
