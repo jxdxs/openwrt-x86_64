@@ -45,8 +45,22 @@ jobs:
       - name: Clone OpenWrt source (openwrt-24.10)
         run: git clone --depth 1 --branch openwrt-24.10 https://github.com/openwrt/openwrt.git openwrt
 
-      - name: Add OpenClash package
-        run: git clone --depth 1 -b master https://github.com/vernesong/OpenClash.git openwrt/package/OpenClash
+      - name: Add OpenClash package with bundled Meta (mihomo) core
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone --depth 1 -b master https://github.com/vernesong/OpenClash.git openwrt/package/OpenClash
+          CORE_DIR=openwrt/package/OpenClash/luci-app-openclash/root/etc/openclash/core
+          mkdir -p "$CORE_DIR"
+          TAG=$(gh api repos/MetaCubeX/mihomo/releases/latest --jq .tag_name)
+          ASSET="mihomo-linux-amd64-v1-${TAG}.gz"
+          echo "downloading Meta core asset: $ASSET"
+          curl -fL --retry 3 -o /tmp/mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/${TAG}/${ASSET}"
+          gunzip -c /tmp/mihomo.gz > "$CORE_DIR/clash_meta"
+          chmod +x "$CORE_DIR/clash_meta"
+          echo '--- meta core smoke test (runner is amd64) ---'
+          "$CORE_DIR/clash_meta" -v
+          ls -lh "$CORE_DIR"
 
       - name: Prepare feeds and config
         run: |
@@ -84,17 +98,23 @@ jobs:
           grep -A7 'config PACKAGE_luci-app-passwall$' tmp/.config-package.in | head -9
           echo 'patched luci block:'
           grep -A6 'config PACKAGE_luci$' tmp/.config-package.in | head -8
-          echo '=== restore requested values ==='
-          sed -i 's|^# CONFIG_PACKAGE_luci is not set$|CONFIG_PACKAGE_luci=y|' .config
-          sed -i 's|^# CONFIG_PACKAGE_luci-app-passwall is not set$|CONFIG_PACKAGE_luci-app-passwall=y|' .config
-          grep -q '^CONFIG_LUCI_LANG_zh-cn=y$' .config || echo 'CONFIG_LUCI_LANG_zh-cn=y' >> .config
+          echo '=== restore requested values (rejection-bug insurance) ==='
+          force_y() {
+            local s="$1"
+            if grep -q "^$s=y$" .config; then echo "already $s"
+            elif grep -q "^# $s is not set$" .config; then sed -i "s|^# $s is not set$|$s=y|" .config; echo "forced $s"
+            else echo "$s=y" >> .config; echo "appended $s"; fi
+          }
+          force_y CONFIG_PACKAGE_luci
+          force_y CONFIG_LUCI_LANG_zh_Hans
+          force_y CONFIG_PACKAGE_luci-app-openclash
           echo '=== round 2 defconfig (patched metadata; select closure runs) ==='
           make defconfig
           echo '=== select-closure evidence (informational) ==='
-          for p in luci luci-app-passwall luci-light xray-core sing-box chinadns-ng dns2socks microsocks tcping lyaml ip-full lua haproxy geoview shadowsocks-rust-sslocal shadowsocksr-libev-ssr-local simple-obfs-client v2ray-plugin nftables luci-app-firewall luci-mod-admin-full uhttpd luci-app-package-manager; do
+          for p in luci luci-app-openclash luci-light dnsmasq-full bash ruby curl ca-bundle ip-full luci-compat kmod-nft-tproxy luci-i18n-base-zh-cn luci-i18n-admin-full-zh-cn luci-i18n-firewall-zh-cn luci-app-package-manager uhttpd; do
             grep -qE "^CONFIG_PACKAGE_$p=y" .config && echo "OK  $p" || echo "MISS $p"
           done
-          grep -E 'LUCI_LANG' .config || echo '(no LUCI_LANG lines)'
+          grep -E 'LUCI_LANG_zh' .config || echo '(no zh LANG lines)'
           echo '--- verify key symbols ---'
           fail=0
           check_y() { grep -qE "^$1=y" .config && echo "OK  $1=y" || { echo "MISSING $1"; fail=1; }; }
@@ -103,12 +123,13 @@ jobs:
           check_y CONFIG_TARGET_x86_64
           grep -qE "^CONFIG_TARGET_ROOTFS_PARTSIZE=256" .config && echo "OK  ROOTFS_PARTSIZE=256" || echo "WARN ROOTFS_PARTSIZE not 256 (kept default)"
           check_y CONFIG_PACKAGE_luci
-          check_y CONFIG_PACKAGE_luci-app-passwall
           check_y CONFIG_PACKAGE_luci-app-openclash
+          check_y CONFIG_LUCI_LANG_zh_Hans
           check_y CONFIG_PACKAGE_dnsmasq-full
           check_n CONFIG_PACKAGE_dnsmasq
           check_n CONFIG_PACKAGE_dnsmasq-dhcpv6
-          grep -qE "^CONFIG_LUCI_LANG_zh-cn=y" .config && echo "OK  CONFIG_LUCI_LANG_zh-cn=y" || echo "WARN zh-cn language symbol not set (check i18n in log)"
+          if grep -qE '^CONFIG_PACKAGE_luci-app-passwall=y' .config; then echo "MISSING passwall should be absent"; fail=1; else echo "OK  passwall absent"; fi
+          grep -qE "^CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" .config && echo "OK  luci-i18n-base-zh-cn=y" || echo "WARN i18n-base-zh-cn not set (check manifest after build)"
           if [ "$fail" -ne 0 ]; then echo "::error::config verification failed"; exit 1; fi
 
       - name: Build firmware
@@ -117,6 +138,12 @@ jobs:
           if ! make -j"$(nproc)"; then
             echo '::error::world build failed - verbose incremental retry for exact root cause'
             make -j1 V=s
+            exit 1
+          fi
+          echo '--- verify meta core inside target rootfs ---'
+          find build_dir/target-x86_64_musl/root-x86_64 -name 'clash_meta' -ls
+          if ! find build_dir/target-x86_64_musl/root-x86_64 -name 'clash_meta' | grep -q .; then
+            echo '::error::clash_meta core missing from target rootfs'
             exit 1
           fi
           echo '--- build output ---'
