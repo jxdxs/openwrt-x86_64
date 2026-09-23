@@ -82,10 +82,14 @@ jobs:
           fi
           echo '--- DIAG: feeds list ---'
           ./scripts/feeds list 2>/dev/null | grep -E '^(luci|luci-app-passwall) ' || echo '(not in feeds index)'
-          echo '--- DIAG: def lines raw for PACKAGE_luci ---'
-          grep -n -B3 -A30 'config PACKAGE_luci$' tmp/.config-package.in || echo '(STILL NOT FOUND unanchored)'
-          echo '--- DIAG: def lines raw for PACKAGE_luci-app-passwall ---'
-          grep -n -B3 -A34 'config PACKAGE_luci-app-passwall$' tmp/.config-package.in || echo '(STILL NOT FOUND unanchored)'
+          echo '--- DIAG: window 58415-58460 (LuCI menu structure) ---'
+          sed -n '58415,58460p' tmp/.config-package.in | cat -A | sed 's/\$$//' | head -50
+          echo '--- DIAG: window 59600-59660 (apps submenu + passwall) ---'
+          sed -n '59600,59660p' tmp/.config-package.in | head -65
+          echo '--- DIAG: openclash block with -B15 (comparison) ---'
+          grep -n -B15 -A8 'config PACKAGE_luci-app-openclash$' tmp/.config-package.in || echo '(openclash def not found!)'
+          echo '--- DIAG: all menu/if depends near LuCI ---'
+          grep -n -E '^(menu|endmenu|if |endif)' tmp/.config-package.in | sed -n '1,80p'
           echo '--- DIAG: ip-full symbol in metadata ---'
           grep -cE 'config PACKAGE_ip-full$' tmp/.config-package.in && echo 'ip-full DEFINED' || echo 'ip-full NOT DEFINED in metadata!'
           grep -n 'PACKAGE_ip-full' tmp/.config-package.in | head -8
