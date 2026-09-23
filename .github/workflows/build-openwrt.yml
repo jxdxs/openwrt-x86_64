@@ -59,49 +59,35 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Resolve config (make defconfig)
+      - name: Resolve config (make defconfig + metadata patch)
         working-directory: openwrt
         run: |
+          echo '=== round 1 defconfig (exposes rejected feed symbols) ==='
           make defconfig
-          echo '--- DIAG: .config file format ---'
-          file .config || true
-          head -c 16 .config | od -c | head -2 || true
-          echo '--- DIAG: .config stats ---'
-          wc -l .config
-          echo "PACKAGE entries: $(grep -cE '^#? ?CONFIG_PACKAGE' .config || true)"
-          echo '--- DIAG: raw luci/passwall lines in .config ---'
-          grep -nE 'luci' .config | head -30 || echo '(NO luci lines at all)'
-          echo '--- DIAG: metadata input (tmp/.config-package.in) ---'
-          if [ -f tmp/.config-package.in ]; then
-            echo "metadata lines: $(wc -l < tmp/.config-package.in)"
-            grep -c 'PACKAGE_luci-app-passwall' tmp/.config-package.in || echo 'passwall NOT in metadata'
-            grep -cE 'config PACKAGE_luci$' tmp/.config-package.in || echo 'luci meta NOT in metadata'
-            grep -c 'PACKAGE_luci-app-openclash' tmp/.config-package.in || echo 'openclash NOT in metadata'
-          else
-            echo 'tmp/.config-package.in MISSING'
-          fi
-          echo '--- DIAG: feeds list ---'
-          ./scripts/feeds list 2>/dev/null | grep -E '^(luci|luci-app-passwall) ' || echo '(not in feeds index)'
-          echo '--- DIAG: window 58415-58460 (LuCI menu structure) ---'
-          sed -n '58415,58460p' tmp/.config-package.in | cat -A | sed 's/\$$//' | head -50
-          echo '--- DIAG: window 59600-59660 (apps submenu + passwall) ---'
-          sed -n '59600,59660p' tmp/.config-package.in | head -65
-          echo '--- DIAG: openclash block with -B15 (comparison) ---'
-          grep -n -B15 -A8 'config PACKAGE_luci-app-openclash$' tmp/.config-package.in || echo '(openclash def not found!)'
-          echo '--- DIAG: all menu/if depends near LuCI ---'
-          grep -n -E '^(menu|endmenu|if |endif)' tmp/.config-package.in | sed -n '1,80p'
-          echo '--- DIAG: ip-full symbol in metadata ---'
-          grep -cE 'config PACKAGE_ip-full$' tmp/.config-package.in && echo 'ip-full DEFINED' || echo 'ip-full NOT DEFINED in metadata!'
-          grep -n 'PACKAGE_ip-full' tmp/.config-package.in | head -8
-          echo '--- DIAG: feeds list ip* ---'
-          ./scripts/feeds list 2>/dev/null | grep -E '^ip' || echo '(ip* NOT in feeds index)'
-          echo '--- DIAG: .config line for passwall ---'
-          grep -n 'PACKAGE_luci-app-passwall' .config || echo '(absent from .config)'
-          echo '--- DIAG: key dep packages in feeds index ---'
-          ./scripts/feeds list 2>/dev/null | grep -E '^(lyaml|ip-full|luci-light|luci-app-package-manager|coreutils-nohup) ' || echo '(some NOT in index)'
-          echo '--- DIAG: package/feeds symlinks ---'
-          ls -l package/feeds/ 2>/dev/null || true
-          ls -l package/feeds/passwall_luci/ 2>/dev/null || true
+          grep -nE '^# CONFIG_PACKAGE_luci is not set$|^# CONFIG_PACKAGE_luci-app-passwall is not set$|^CONFIG_PACKAGE_luci=y' .config | head -6 || true
+          echo '=== patch generated metadata: strip depends gates on luci + passwall ==='
+          awk '
+            /^[ \t]*config PACKAGE_luci$/ || /^[ \t]*menuconfig PACKAGE_luci$/ || /^[ \t]*config PACKAGE_luci-app-passwall$/ || /^[ \t]*menuconfig PACKAGE_luci-app-passwall$/ { blk=1 }
+            blk && /^[ \t]*depends on/ { next }
+            blk && /^[ \t]*help/ { blk=0 }
+            { print }
+          ' tmp/.config-package.in > tmp/.cfg.new
+          mv tmp/.cfg.new tmp/.config-package.in
+          echo 'patched passwall block:'
+          grep -A7 'config PACKAGE_luci-app-passwall$' tmp/.config-package.in | head -9
+          echo 'patched luci block:'
+          grep -A6 'config PACKAGE_luci$' tmp/.config-package.in | head -8
+          echo '=== restore requested values ==='
+          sed -i 's|^# CONFIG_PACKAGE_luci is not set$|CONFIG_PACKAGE_luci=y|' .config
+          sed -i 's|^# CONFIG_PACKAGE_luci-app-passwall is not set$|CONFIG_PACKAGE_luci-app-passwall=y|' .config
+          grep -q '^CONFIG_LUCI_LANG_zh-cn=y$' .config || echo 'CONFIG_LUCI_LANG_zh-cn=y' >> .config
+          echo '=== round 2 defconfig (patched metadata; select closure runs) ==='
+          make defconfig
+          echo '=== select-closure evidence (informational) ==='
+          for p in luci luci-app-passwall luci-light xray-core sing-box chinadns-ng dns2socks microsocks tcping lyaml ip-full lua haproxy geoview shadowsocks-rust-sslocal shadowsocksr-libev-ssr-local simple-obfs-client v2ray-plugin nftables luci-app-firewall luci-mod-admin-full uhttpd luci-app-package-manager; do
+            grep -qE "^CONFIG_PACKAGE_$p=y" .config && echo "OK  $p" || echo "MISS $p"
+          done
+          grep -E 'LUCI_LANG' .config || echo '(no LUCI_LANG lines)'
           echo '--- verify key symbols ---'
           fail=0
           check_y() { grep -qE "^$1=y" .config && echo "OK  $1=y" || { echo "MISSING $1"; fail=1; }; }
