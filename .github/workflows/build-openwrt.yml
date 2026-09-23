@@ -13,6 +13,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: x86_64 + PassWall + OpenClash
@@ -119,21 +122,19 @@ jobs:
           echo '--- build output ---'
           ls -lh bin/targets/x86/64/
 
-      - name: Package firmware
+      - name: Publish GitHub Release (individual files, no bundling)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd openwrt
-          tar -czf ../firmware-x86_64.tar.gz -C bin/targets x86/64
-          cd ..
-          sha256sum firmware-x86_64.tar.gz > firmware-x86_64.sha256
-          cat firmware-x86_64.sha256
-          ls -lh firmware-x86_64.tar.gz
-
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-x86_64
-          path: |
-            firmware-x86_64.tar.gz
-            firmware-x86_64.sha256
-          retention-days: 30
-          if-no-files-found: error
+          TAG="build-${{ github.run_number }}"
+          TITLE="OpenWrt 24.10 x86_64 build ${{ github.run_number }}"
+          NOTES="Auto-built from commit ${{ github.sha }} (PassWall + OpenClash + Xray/sing-box). Each image is downloadable individually; verify with sha256sums."
+          cd openwrt/bin/targets/x86/64
+          FILES=$(find . -maxdepth 1 -type f | sed 's|^\./||')
+          echo "assets:"; echo "$FILES"
+          if gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES" $FILES; then
+            echo "Release $TAG created"
+          else
+            echo "Release $TAG already exists - re-uploading assets"
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber $FILES
+          fi

@@ -1,0 +1,6 @@
+# local build artifacts - never commit binaries
+firmware/
+artifact-dl/
+*.img.gz
+*.tar.gz
+firmware-x86_64.*
