@@ -103,6 +103,9 @@ jobs:
           check_n CONFIG_PACKAGE_dnsmasq-dhcpv6
           grep -qE "^CONFIG_LUCI_LANG_zh-cn=y" .config && echo "OK  CONFIG_LUCI_LANG_zh-cn=y" || echo "WARN zh-cn language symbol not set (check i18n in log)"
           if [ "$fail" -ne 0 ]; then echo "::error::config verification failed"; exit 1; fi
+          echo '=== geoview preflight (V=s, fail fast for exact root cause) ==='
+          make package/feeds/passwall_packages/geoview/compile -j1 V=s || { echo "::error::geoview preflight failed - see verbose log above"; exit 1; }
+          echo 'geoview preflight OK'
 
       - name: Build firmware
         working-directory: openwrt
