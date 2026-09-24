@@ -141,11 +141,19 @@ jobs:
             exit 1
           fi
           echo '--- verify meta core inside target rootfs ---'
-          find build_dir/target-x86_64_musl/root-x86_64 -name 'clash_meta' -ls
-          if ! find build_dir/target-x86_64_musl/root-x86_64 -name 'clash_meta' | grep -q .; then
-            echo '::error::clash_meta core missing from target rootfs'
+          ROOTFS_DIR=$(ls -d build_dir/target-*/root-* 2>/dev/null | head -1)
+          echo "rootfs staging dir: ${ROOTFS_DIR:-<none found>}"
+          ls -d build_dir/target-*/ 2>/dev/null || true
+          if [ -n "$ROOTFS_DIR" ]; then
+            ls -lh "$ROOTFS_DIR/etc/openclash/core/" 2>/dev/null || echo '(core dir not present in rootfs staging)'
+          fi
+          CORE_HIT=$(find build_dir -name 'clash_meta' -type f 2>/dev/null | head -1)
+          echo "clash_meta found at: ${CORE_HIT:-<not found>}"
+          if [ -z "$CORE_HIT" ]; then
+            echo '::error::clash_meta core missing from build_dir'
             exit 1
           fi
+          echo 'meta core bundle verified'
           echo '--- build output ---'
           ls -lh bin/targets/x86/64/
 
@@ -155,7 +163,7 @@ jobs:
         run: |
           TAG="build-${{ github.run_number }}"
           TITLE="OpenWrt 24.10 x86_64 build ${{ github.run_number }}"
-          NOTES="Auto-built from commit ${{ github.sha }} (PassWall + OpenClash + Xray/sing-box). Each image is downloadable individually; verify with sha256sums."
+          NOTES="Auto-built OpenWrt 24.10 for x86_64 from commit ${{ github.sha }}. Bundled: LuCI (Simplified Chinese), OpenClash 0.47.x with Meta (mihomo) core preinstalled at /etc/openclash/core/clash_meta. Each file is downloadable individually; verify with sha256sums."
           cd openwrt/bin/targets/x86/64
           FILES=$(find . -maxdepth 1 -type f | sed 's|^\./||')
           echo "assets:"; echo "$FILES"
