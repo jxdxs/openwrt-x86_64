@@ -87,8 +87,14 @@ jobs:
       - name: Update and install feeds
         working-directory: openwrt
         run: |
+          # 关键：清空 tmp，让 feeds install 重建完整的包索引。
+          # 若沿用旧索引（仅含核心包），后续 defconfig 会把所有
+          # 来自 feed 的符号判为不可选并写成 "is not set"。
+          rm -rf tmp
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          echo "index packages: $(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo NOFILE)"
+          echo "luci in index: $(grep -c '^[[:space:]]*config PACKAGE_luci$' tmp/.config-package.in 2>/dev/null || echo 0)"
           echo '--- feed packages installed ---'
           for d in package/feeds/*/; do
             [ -d "$d" ] || continue
@@ -110,20 +116,11 @@ jobs:
           if [ -f feeds/packages/lang/golang/golang-package.mk ]; then
             sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/' feeds/packages/lang/golang/golang-package.mk || true
           fi
-          echo '=== pre-defconfig index probe ==='
-          echo "::notice title=tmp exists::$(ls -d tmp 2>/dev/null || echo NO)"
-          echo "::notice title=predef list::$(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo NOFILE)"
-          echo "::notice title=predef luci::$(grep -c '^[[:space:]]*config PACKAGE_luci$' tmp/.config-package.in 2>/dev/null || echo 0)"
-          echo "::notice title=predef bash::$(grep -c '^[[:space:]]*config PACKAGE_bash$' tmp/.config-package.in 2>/dev/null || echo 0)"
-          echo "::notice title=predef luci-app-ttyd::$(grep -c '^[[:space:]]*config PACKAGE_luci-app-ttyd$' tmp/.config-package.in 2>/dev/null || echo 0)"
-          echo '=== refresh package index (feeds just installed) ==='
-          rm -rf tmp
+          echo '=== ensure package index is complete ==='
+          echo "index packages: $(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo NOFILE)"
+          echo "luci in index: $(grep -c '^[[:space:]]*config PACKAGE_luci$' tmp/.config-package.in 2>/dev/null || echo 0)"
+          echo '=== defconfig ==='
           make defconfig
-          echo '=== post-defconfig index probe ==='
-          echo "::notice title=postdef list::$(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo NOFILE)"
-          echo "::notice title=postdef luci::$(grep -c '^[[:space:]]*config PACKAGE_luci$' tmp/.config-package.in 2>/dev/null || echo 0)"
-          echo "::notice title=postdef bash::$(grep -c '^[[:space:]]*config PACKAGE_bash$' tmp/.config-package.in 2>/dev/null || echo 0)"
-          echo "::notice title=postdef luci-app-ttyd::$(grep -c '^[[:space:]]*config PACKAGE_luci-app-ttyd$' tmp/.config-package.in 2>/dev/null || echo 0)"
           echo '=== verify key symbols ==='
           fail=0
           check_y() {
