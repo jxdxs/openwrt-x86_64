@@ -122,8 +122,31 @@ jobs:
           if [ -f feeds/packages/lang/golang/golang-package.mk ]; then
             sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/' feeds/packages/lang/golang/golang-package.mk || true
           fi
+          echo '=== feeds state snapshot (as annotations) ==='
+          NF=$(ls feeds 2>/dev/null | grep -vc '\.' || echo 0)
+          echo "::notice title=feeds dirs::$(ls feeds 2>/dev/null | tr '\n' ' ' | head -c 400)"
+          for d in feeds/luci feeds/packages; do
+            if [ -d "$d" ]; then
+              echo "::notice title=$d::exists, $(ls "$d" 2>/dev/null | wc -l) entries"
+            else
+              echo "::error title=MISSING FEED::$d not found"
+            fi
+          done
+          echo "::notice title=package/feeds::$(ls package/feeds 2>/dev/null | tr '\n' ' ')"
+          for p in luci ttyd frpc openlist netdata luci-app-ttyd luci-app-frpc luci-app-openlist luci-app-netdata luci-app-statistics; do
+            if grep -q "config PACKAGE_$p$" tmp/.config-package.in 2>/dev/null; then
+              echo "::notice title=metadata::$p OK"
+            else
+              echo "::error title=metadata missing::$p not in .config-package.in"
+            fi
+          done
           echo '=== defconfig ==='
           make defconfig
+          echo '=== ARCH/TARGET RELEVANT STATE ==='
+          for s in CONFIG_TARGET_x86 CONFIG_TARGET_x86_64 CONFIG_TARGET_ARCH_PACKAGES CONFIG_x86_64 CONFIG_TARGET_SUBTARGET CONFIG_TARGET_BOARD CONFIG_ARCH_64BIT CONFIG_TARGET_x86_64_DEVICE_generic; do
+            v=$(grep -E "^(# )?$s( is not set|=)" .config | head -1)
+            echo "::notice title=cfg::$s => ${v:-ABSENT}"
+          done
           echo '=== effective config (key symbols) ==='
           grep -E '^(CONFIG_TARGET_x86|CONFIG_TARGET_x86_64|CONFIG_PACKAGE_luci=|CONFIG_LUCI_LANG_zh_Hans|CONFIG_PACKAGE_(frpc|netdata|ttyd|openlist|luci-app-.*))=' .config | sort || true
           echo '=== verify key symbols ==='
