@@ -128,6 +128,10 @@ jobs:
             echo '::error title=incomplete package index::index has only '"$IDX"' packages, expected ~12000'
             exit 1
           fi
+          echo '=== seed config sanity (must match repo .config) ==='
+          echo "lines=$(wc -l < .config) bytes=$(wc -c < .config)"
+          echo "sha=$(sha256sum .config | cut -d' ' -f1)"
+          grep -nE '^CONFIG_PACKAGE_(luci|ttyd|frpc)=y|^# CONFIG_RUBY_ENABLE_YJIT' .config || echo 'SEED LINES MISSING'
           echo '=== defconfig (expand seed config against full index) ==='
           make defconfig
           echo "expanded config: $(wc -l < .config) lines"
