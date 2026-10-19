@@ -140,6 +140,8 @@ jobs:
               echo "::error title=metadata missing::$p not in .config-package.in"
             fi
           done
+          echo '=== force clean package index (feeds installed after last scan) ==='
+          rm -rf tmp
           echo '=== defconfig ==='
           make defconfig
           echo '=== ARCH/TARGET RELEVANT STATE ==='
