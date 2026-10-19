@@ -103,10 +103,28 @@ jobs:
           fi
           echo '=== defconfig ==='
           make defconfig
+          echo '=== effective config (key symbols) ==='
+          grep -E '^(CONFIG_TARGET_x86|CONFIG_TARGET_x86_64|CONFIG_PACKAGE_luci=|CONFIG_LUCI_LANG_zh_Hans|CONFIG_PACKAGE_(frpc|netdata|ttyd|openlist|luci-app-.*))=' .config | sort || true
           echo '=== verify key symbols ==='
           fail=0
-          check_y() { grep -qE "^$1=y" .config && echo "OK  $1=y" || { echo "MISSING $1"; fail=1; }; }
-          check_n() { grep -qE "^# $1 is not set" .config && echo "OK  $1 disabled" || { echo "MISSING $1 disabled"; fail=1; }; }
+          check_y() {
+            if grep -qE "^$1=y" .config; then
+              echo "OK  $1=y"
+            else
+              echo "MISSING $1 (actual: $(grep -E "^(# )?$1( is not set|=)" .config | head -1))"
+              echo "::error title=Missing symbol::$1"
+              fail=1
+            fi
+          }
+          check_n() {
+            if grep -qE "^# $1 is not set" .config; then
+              echo "OK  $1 disabled"
+            else
+              echo "MISSING $1 disabled (actual: $(grep -E "^(# )?$1( is not set|=)" .config | head -1))"
+              echo "::error title=Symbol should be disabled::$1"
+              fail=1
+            fi
+          }
           check_y CONFIG_TARGET_x86
           check_y CONFIG_TARGET_x86_64
           check_y CONFIG_PACKAGE_luci
@@ -127,9 +145,21 @@ jobs:
           check_y CONFIG_PACKAGE_luci-app-autoreboot
           check_y CONFIG_PACKAGE_openlist
           check_y CONFIG_PACKAGE_luci-app-openlist
-          grep -qE '^CONFIG_PACKAGE_nikki=y' .config && { echo "ERROR: nikki must be absent"; fail=1; } || echo "OK  nikki absent"
-          grep -qE '^CONFIG_TARGET_ROOTFS_PARTSIZE=1024' .config && echo "OK  PARTSIZE=1024" || echo "WARN PARTSIZE mismatch"
-          if [ "$fail" -ne 0 ]; then echo "::error::config verification failed"; exit 1; fi
+          if grep -qE '^CONFIG_PACKAGE_nikki=y' .config; then
+            echo "::error title=nikki present::nikki must be absent"
+            fail=1
+          else
+            echo "OK  nikki absent"
+          fi
+          if grep -qE '^CONFIG_TARGET_ROOTFS_PARTSIZE=1024' .config; then
+            echo "OK  PARTSIZE=1024"
+          else
+            echo "WARN PARTSIZE mismatch: $(grep -E '^CONFIG_TARGET_ROOTFS_PARTSIZE' .config)"
+          fi
+          if [ "$fail" -ne 0 ]; then
+            echo '::error title=config verification failed::see MISSING lines above'
+            exit 1
+          fi
 
       - name: Build firmware
         working-directory: openwrt
