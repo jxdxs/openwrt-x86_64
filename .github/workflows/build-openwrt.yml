@@ -87,14 +87,13 @@ jobs:
       - name: Update and install feeds
         working-directory: openwrt
         run: |
-          # 关键：清空 tmp，让 feeds install 重建完整的包索引。
-          # 若沿用旧索引（仅含核心包），后续 defconfig 会把所有
-          # 来自 feed 的符号判为不可选并写成 "is not set"。
-          rm -rf tmp
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          echo "index packages: $(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo NOFILE)"
-          echo "luci in index: $(grep -c '^[[:space:]]*config PACKAGE_luci$' tmp/.config-package.in 2>/dev/null || echo 0)"
+          echo '--- feed packages installed ---'
+          for d in package/feeds/*/; do
+            [ -d "$d" ] || continue
+            echo "$d -> $(ls "$d" | wc -l) entries"
+          done
           echo '--- feed packages installed ---'
           for d in package/feeds/*/; do
             [ -d "$d" ] || continue
@@ -116,9 +115,19 @@ jobs:
           if [ -f feeds/packages/lang/golang/golang-package.mk ]; then
             sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/' feeds/packages/lang/golang/golang-package.mk || true
           fi
-          echo '=== ensure package index is complete ==='
-          echo "index packages: $(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo NOFILE)"
+          echo '=== force-rebuild package index (critical) ==='
+          # feeds update 建立的索引只含核心包（约 2714 个），feeds install
+          # 装入的 feed 包不会自动进入索引。prepare-tmpinfo 因时间戳短路
+          # (`[ "$t" -nt "$f" ]`) 也不会重建，必须显式删除索引文件。
+          rm -f tmp/.packageinfo tmp/.config-package.in
+          make prepare-tmpinfo
+          IDX=$(grep -c '^[[:space:]]*config PACKAGE_' tmp/.config-package.in 2>/dev/null || echo 0)
+          echo "index packages: $IDX"
           echo "luci in index: $(grep -c '^[[:space:]]*config PACKAGE_luci$' tmp/.config-package.in 2>/dev/null || echo 0)"
+          if [ "$IDX" -lt 10000 ]; then
+            echo '::error title=incomplete package index::index has only '"$IDX"' packages, expected ~12000'
+            exit 1
+          fi
           echo '=== defconfig ==='
           make defconfig
           echo '=== verify key symbols ==='
