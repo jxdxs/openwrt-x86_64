@@ -63,22 +63,18 @@ jobs:
           "$CORE_DIR/clash_meta" -v
           ls -lh "$CORE_DIR"
 
-      - name: Add third-party LuCI packages (frp/netdata/statistics/ttyd/timecontrol/autoreboot/openlist)
+      - name: Stage third-party LuCI packages (installed after feeds)
         run: |
-          cd openwrt/package
-          mkdir -p luci-extra
-          # 定时重启 + Netdata LuCI（来自 ImmortalWrt）
+          mkdir -p /tmp/luci-extra
           git clone --depth 1 -q https://github.com/immortalwrt/luci.git /tmp/imluci
-          cp -a /tmp/imluci/applications/luci-app-autoreboot luci-extra/
-          cp -a /tmp/imluci/applications/luci-app-netdata luci-extra/
-          # 家长控制（sirpdboy）
+          cp -a /tmp/imluci/applications/luci-app-autoreboot /tmp/luci-extra/
+          cp -a /tmp/imluci/applications/luci-app-netdata /tmp/luci-extra/
           git clone --depth 1 -q https://github.com/sirpdboy/luci-app-timecontrol.git /tmp/tc
-          cp -a /tmp/tc/luci-app-timecontrol luci-extra/
-          # 修正 luci.mk 相对路径
-          for d in luci-extra/luci-app-autoreboot luci-extra/luci-app-netdata; do
+          cp -a /tmp/tc/luci-app-timecontrol /tmp/luci-extra/
+          for d in /tmp/luci-extra/luci-app-autoreboot /tmp/luci-extra/luci-app-netdata; do
             sed -i 's|include ../../luci.mk|include $(TOPDIR)/feeds/luci/luci.mk|' "$d/Makefile"
           done
-          ls -la luci-extra/
+          ls -la /tmp/luci-extra
 
       - name: Prepare feeds and config
         run: |
@@ -91,8 +87,33 @@ jobs:
       - name: Update and install feeds
         working-directory: openwrt
         run: |
+          set -x
           ./scripts/feeds update -a
+          echo "FEEDS_UPDATE_RC=$?"
+          ls -la feeds/ || true
           ./scripts/feeds install -a
+          echo "FEEDS_INSTALL_RC=$?"
+          echo '--- installed feed packages ---'
+          ls -la package/feeds/ || true
+          for d in package/feeds/*/; do
+            [ -d "$d" ] || continue
+            echo "$d -> $(ls "$d" | wc -l) entries"
+          done
+          echo '--- critical packages present? ---'
+          for p in package/feeds/luci/luci-app-ttyd package/feeds/luci/luci-app-openlist package/feeds/luci/luci-app-statistics package/feeds/packages/ttyd package/feeds/packages/frpc package/feeds/packages/openlist package/feeds/luci/collections/luci; do
+            if [ -e "$p" ]; then echo "OK   $p"; else echo "MISS $p"; fi
+          done
+          echo '--- feeds/luci exists? ---'
+          ls -d feeds/luci 2>/dev/null || echo "feeds/luci MISSING"
+          ls -d feeds/packages 2>/dev/null || echo "feeds/packages MISSING"
+
+      - name: Install third-party packages into package/luci-extra
+        run: |
+          mkdir -p openwrt/package/luci-extra
+          cp -a /tmp/luci-extra/* openwrt/package/luci-extra/
+          ls -la openwrt/package/luci-extra
+          echo '--- luci.mk present? (must exist before defconfig) ---'
+          ls -l openwrt/feeds/luci/luci.mk
 
       - name: Resolve config and verify symbols
         working-directory: openwrt
