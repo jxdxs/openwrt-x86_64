@@ -128,8 +128,18 @@ jobs:
             echo '::error title=incomplete package index::index has only '"$IDX"' packages, expected ~12000'
             exit 1
           fi
+          echo '=== probe .config BEFORE defconfig ==='
+          echo "size=$(wc -c < .config) lines=$(wc -l < .config)"
+          echo "luci_line=[$(grep -n '^CONFIG_PACKAGE_luci=y' .config | head -1)]"
+          echo "perfeed=[$(grep -n '^CONFIG_PER_FEED_REPO=y' .config | head -1)]"
+          echo "feedluci=[$(grep -n '^CONFIG_FEED_luci=y' .config | head -1)]"
           echo '=== defconfig ==='
           make defconfig
+          echo '=== probe .config AFTER defconfig ==='
+          echo "size=$(wc -c < .config) lines=$(wc -l < .config)"
+          echo "perfeed=[$(grep -nE '^(# )?CONFIG_PER_FEED_REPO( is not set|=)' .config | head -1)]"
+          echo "feedluci=[$(grep -nE '^(# )?CONFIG_FEED_luci( is not set|=)' .config | head -1)]"
+          echo "luci=[$(grep -nE '^(# )?CONFIG_PACKAGE_luci( is not set|=)' .config | head -1)]"
           echo '=== verify key symbols ==='
           fail=0
           check_y() {
