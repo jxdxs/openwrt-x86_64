@@ -4,3 +4,15 @@ artifact-dl/
 *.img.gz
 *.tar.gz
 firmware-x86_64.*
+
+# OpenWrt 源码树与构建缓存（本地编译目录，不入库）
+openwrt/
+backup-*/
+build_dir/
+staging_dir/
+tmp/
+dl/
+
+# 临时文件
+*.log
+.askpass.cmd

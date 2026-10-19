@@ -1,1 +1,2 @@
-# PassWall feeds removed - OpenClash only (no extra proxy packages)
+# PassWall / Nikki feeds 均不启用（仅 OpenClash + 官方 feed）
+# 第三方插件（autoreboot / netdata / timecontrol）由 workflow 直接 clone 到 openwrt/package/luci-extra/
