@@ -133,6 +133,13 @@ jobs:
             fi
           done
           echo "::notice title=package/feeds::$(ls package/feeds 2>/dev/null | tr '\n' ' ')"
+          echo "::notice title=feeds/luci/applications count::$(ls feeds/luci/applications 2>/dev/null | wc -l)"
+          echo "::notice title=feeds/packages/net count::$(ls feeds/packages/net 2>/dev/null | wc -l)"
+          echo "::notice title=feeds/packages/admin count::$(ls feeds/packages/admin 2>/dev/null | wc -l)"
+          echo "::notice title=package/feeds/luci count::$(ls package/feeds/luci 2>/dev/null | wc -l)"
+          echo "::notice title=package/feeds/packages count::$(ls package/feeds/packages 2>/dev/null | wc -l)"
+          echo "::notice title=tmp exists::$(ls -d tmp 2>/dev/null || echo NO)"
+          echo "::error title=DIAG-DONE::diagnostic placeholder to surface above notices"
           for p in luci ttyd frpc openlist netdata luci-app-ttyd luci-app-frpc luci-app-openlist luci-app-netdata luci-app-statistics; do
             if grep -q "config PACKAGE_$p$" tmp/.config-package.in 2>/dev/null; then
               echo "::notice title=metadata::$p OK"
