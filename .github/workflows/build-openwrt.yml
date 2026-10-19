@@ -65,16 +65,16 @@ jobs:
 
       - name: Stage third-party LuCI packages (installed after feeds)
         run: |
-          mkdir -p /tmp/luci-extra
+          mkdir -p /tmp/pkgstage
           git clone --depth 1 -q https://github.com/immortalwrt/luci.git /tmp/imluci
-          cp -a /tmp/imluci/applications/luci-app-autoreboot /tmp/luci-extra/
-          cp -a /tmp/imluci/applications/luci-app-netdata /tmp/luci-extra/
+          cp -a /tmp/imluci/applications/luci-app-autoreboot /tmp/pkgstage/
+          cp -a /tmp/imluci/applications/luci-app-netdata /tmp/pkgstage/
           git clone --depth 1 -q https://github.com/sirpdboy/luci-app-timecontrol.git /tmp/tc
-          cp -a /tmp/tc/luci-app-timecontrol /tmp/luci-extra/
-          for d in /tmp/luci-extra/luci-app-autoreboot /tmp/luci-extra/luci-app-netdata; do
+          cp -a /tmp/tc/luci-app-timecontrol /tmp/pkgstage/
+          for d in /tmp/pkgstage/luci-app-autoreboot /tmp/pkgstage/luci-app-netdata; do
             sed -i 's|include ../../luci.mk|include $(TOPDIR)/feeds/luci/luci.mk|' "$d/Makefile"
           done
-          ls -la /tmp/luci-extra
+          ls -la /tmp/pkgstage
 
       - name: Prepare feeds and config
         run: |
@@ -102,7 +102,7 @@ jobs:
       - name: Install third-party packages into package/luci-extra
         run: |
           mkdir -p openwrt/package/luci-extra
-          cp -a /tmp/luci-extra/* openwrt/package/luci-extra/
+          cp -a /tmp/pkgstage/* openwrt/package/luci-extra/
           ls -la openwrt/package/luci-extra
           echo '--- luci.mk present? (must exist before defconfig) ---'
           ls -l openwrt/feeds/luci/luci.mk
